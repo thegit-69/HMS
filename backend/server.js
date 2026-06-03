@@ -1,27 +1,29 @@
 const express = require('express');
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 const cors = require('cors');
-const bcrypt = require('bcrypt'); // Import bcrypt
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3001;
-const saltRounds = 10; // The cost factor for hashing
+const saltRounds = 10;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // Database Connection Pool
-const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
+const pool = new Pool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    ssl: (process.env.DB_HOST === 'localhost' || process.env.DB_HOST === 'host.docker.internal') ? false : { rejectUnauthorized: true }
+    database: process.env.DB_NAME || 'healthcare_db',
+    port: process.env.DB_PORT || 5432,
+    ssl: (process.env.DB_HOST === 'localhost' || process.env.DB_HOST === 'host.docker.internal') ? false : { rejectUnauthorized: false }
+});
+
+pool.on('error', (err) => {
+    console.error('Unexpected error on idle client', err);
 });
 
 // --- API Endpoints ---
@@ -38,12 +40,12 @@ app.post('/api/login', async (req, res) => {
     }
     try {
         // 1. Find the user by username only
-        const [rows] = await pool.query('SELECT * FROM Users WHERE username = ?', [username]);
-        if (rows.length === 0) {
+        const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        if (result.rows.length === 0) {
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
 
-        const user = rows[0];
+        const user = result.rows[0];
 
         // 2. Compare the provided password with the stored hash
         const passwordMatch = await bcrypt.compare(password, user.password);
@@ -70,14 +72,14 @@ app.post('/api/users', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         // 2. Store the hashed password in the database
-        const [result] = await pool.query(
-            'INSERT INTO Users (username, password, role, name) VALUES (?, ?, ?, ?)',
+        const result = await pool.query(
+            'INSERT INTO users (username, password, role, name) VALUES ($1, $2, $3, $4) RETURNING id, username, role, name',
             [username, hashedPassword, role, name]
         );
-        res.status(201).json({ id: result.insertId, username, role, name });
+        res.status(201).json(result.rows[0]);
     } catch (error) {
         // Handle cases where the username might already exist
-        if (error.code === 'ER_DUP_ENTRY') {
+        if (error.code === '23505') {
             return res.status(409).json({ message: 'Username already exists.' });
         }
         res.status(500).json({ message: 'Failed to create user', error });
@@ -85,19 +87,28 @@ app.post('/api/users', async (req, res) => {
 });
 
 
-// ... (All other endpoints for Patients, Appointments, Medical Records remain unchanged) ...
-app.get('/api/users', async (req, res) => { try { const [rows] = await pool.query('SELECT id, username, role, name FROM Users'); res.json(rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch users', error }); } });
-app.get('/api/patients', async (req, res) => { try { const [rows] = await pool.query('SELECT * FROM Patients'); res.json(rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch patients', error }); } });
-app.post('/api/patients', async (req, res) => { const { name, dob, gender, contact, email, address } = req.body; try { const [result] = await pool.query('INSERT INTO Patients (name, dob, gender, contact, email, address) VALUES (?, ?, ?, ?, ?, ?)', [name, dob, gender, contact, email, address]); res.status(201).json({ id: result.insertId, ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to add patient', error }); } });
-app.put('/api/patients/:id', async (req, res) => { const { id } = req.params; const { name, dob, gender, contact, email, address } = req.body; try { const [result] = await pool.query('UPDATE Patients SET name = ?, dob = ?, gender = ?, contact = ?, email = ?, address = ? WHERE id = ?', [name, dob, gender, contact, email, address, id]); if (result.affectedRows === 0) { return res.status(404).json({ message: 'Patient not found' }); } res.json({ id: parseInt(id), ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to update patient', error }); } });
-app.delete('/api/patients/:id', async (req, res) => { const { id } = req.params; try { await pool.query('DELETE FROM MedicalRecords WHERE patientId = ?', [id]); await pool.query('DELETE FROM Appointments WHERE patientId = ?', [id]); const [result] = await pool.query('DELETE FROM Patients WHERE id = ?', [id]); if (result.affectedRows === 0) { return res.status(404).json({ message: 'Patient not found' }); } res.status(200).json({ success: true, message: 'Patient deleted successfully' }); } catch (error) { res.status(500).json({ message: 'Failed to delete patient', error }); } });
-app.get('/api/appointments', async (req, res) => { try { const [rows] = await pool.query('SELECT * FROM Appointments ORDER BY date DESC'); res.json(rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch appointments', error }); } });
-app.post('/api/appointments', async (req, res) => { const { patientId, patientName, doctorName, date, reason } = req.body; try { const [result] = await pool.query('INSERT INTO Appointments (patientId, patientName, doctorName, date, reason, status) VALUES (?, ?, ?, ?, ?, ?)', [patientId, patientName, doctorName, date, reason, 'Scheduled']); res.status(201).json({ id: result.insertId, status: 'Scheduled', ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to schedule appointment', error }); } });
-app.get('/api/medical-records', async (req, res) => { try { const [rows] = await pool.query('SELECT * FROM MedicalRecords'); res.json(rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch medical records', error }); } });
-app.post('/api/medical-records', async (req, res) => { const { patientId, doctorName, date, diagnosis, prescription, notes } = req.body; try { const [result] = await pool.query('INSERT INTO MedicalRecords (patientId, doctorName, date, diagnosis, prescription, notes) VALUES (?, ?, ?, ?, ?, ?)', [patientId, doctorName, date, diagnosis, prescription, notes]); res.status(201).json({ id: result.insertId, ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to add medical record', error }); } });
+// ... (All other endpoints for Patients, Appointments, Medical Records - PostgreSQL version) ...
+app.get('/api/users', async (req, res) => { try { const result = await pool.query('SELECT id, username, role, name FROM users'); res.json(result.rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch users', error }); } });
+
+app.get('/api/patients', async (req, res) => { try { const result = await pool.query('SELECT * FROM patients ORDER BY id'); res.json(result.rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch patients', error }); } });
+
+app.post('/api/patients', async (req, res) => { const { name, dob, gender, contact, email, address } = req.body; try { const result = await pool.query('INSERT INTO patients (name, dob, gender, contact, email, address) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *', [name, dob, gender, contact, email, address]); res.status(201).json(result.rows[0]); } catch (error) { res.status(500).json({ message: 'Failed to add patient', error }); } });
+
+app.put('/api/patients/:id', async (req, res) => { const { id } = req.params; const { name, dob, gender, contact, email, address } = req.body; try { const result = await pool.query('UPDATE patients SET name = $1, dob = $2, gender = $3, contact = $4, email = $5, address = $6 WHERE id = $7 RETURNING *', [name, dob, gender, contact, email, address, id]); if (result.rows.length === 0) { return res.status(404).json({ message: 'Patient not found' }); } res.json(result.rows[0]); } catch (error) { res.status(500).json({ message: 'Failed to update patient', error }); } });
+
+app.delete('/api/patients/:id', async (req, res) => { const { id } = req.params; try { await pool.query('DELETE FROM medical_records WHERE patient_id = $1', [id]); await pool.query('DELETE FROM appointments WHERE patient_id = $1', [id]); const result = await pool.query('DELETE FROM patients WHERE id = $1', [id]); if (result.rowCount === 0) { return res.status(404).json({ message: 'Patient not found' }); } res.status(200).json({ success: true, message: 'Patient deleted successfully' }); } catch (error) { res.status(500).json({ message: 'Failed to delete patient', error }); } });
+
+app.get('/api/appointments', async (req, res) => { try { const result = await pool.query('SELECT * FROM appointments ORDER BY date DESC'); res.json(result.rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch appointments', error }); } });
+
+app.post('/api/appointments', async (req, res) => { const { patientId, patientName, doctorName, date, reason } = req.body; try { const result = await pool.query('INSERT INTO appointments (patient_id, patient_name, doctor_name, date, reason, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *', [patientId, patientName, doctorName, date, reason, 'Scheduled']); res.status(201).json(result.rows[0]); } catch (error) { res.status(500).json({ message: 'Failed to schedule appointment', error }); } });
+
+app.get('/api/medical-records', async (req, res) => { try { const result = await pool.query('SELECT * FROM medical_records'); res.json(result.rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch medical records', error }); } });
+
+app.post('/api/medical-records', async (req, res) => { const { patientId, doctorName, date, diagnosis, prescription, notes } = req.body; try { const result = await pool.query('INSERT INTO medical_records (patient_id, doctor_name, date, diagnosis, prescription, notes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *', [patientId, doctorName, date, diagnosis, prescription, notes]); res.status(201).json(result.rows[0]); } catch (error) { res.status(500).json({ message: 'Failed to add medical record', error }); } });
 
 
 // Start the server
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
+    console.log(`Database: ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME || 'healthcare_db'}`);
 });
