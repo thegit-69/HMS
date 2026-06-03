@@ -1,6 +1,6 @@
 # --- Stage 1: Build the React Application ---
 # Use an official Node.js image to create the build artifacts
-FROM node:18-alpine AS build
+FROM node:20-alpine AS build
 
 # Set the working directory inside the container
 WORKDIR /app

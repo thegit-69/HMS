@@ -11,6 +11,10 @@ services:
     restart: unless-stopped
     env_file:
       - ./backend/.env
+    environment:
+      - DB_HOST=host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "3001:3001"
     networks:
@@ -19,7 +23,7 @@ services:
   # The Frontend Web Server Service
   frontend:
     build:
-      context: ./healthcare-frontend
+      context: ./frontend
     container_name: healthcare_frontend_ui
     restart: unless-stopped
     ports:

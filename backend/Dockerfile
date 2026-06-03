@@ -1,6 +1,6 @@
 # --- Stage 1: Build Stage ---
 # Use a Node.js image to install dependencies
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY . .
 
 # --- Stage 2: Production Stage ---
 # Use a slim, secure Node.js image for the final container
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
