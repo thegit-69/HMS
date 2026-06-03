@@ -21,7 +21,7 @@ const pool = mysql.createPool({
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-    ssl: { rejectUnauthorized: true }
+    ssl: (process.env.DB_HOST === 'localhost' || process.env.DB_HOST === 'host.docker.internal') ? false : { rejectUnauthorized: true }
 });
 
 // --- API Endpoints ---
@@ -42,7 +42,7 @@ app.post('/api/login', async (req, res) => {
         if (rows.length === 0) {
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
-        
+
         const user = rows[0];
 
         // 2. Compare the provided password with the stored hash
@@ -88,13 +88,13 @@ app.post('/api/users', async (req, res) => {
 // ... (All other endpoints for Patients, Appointments, Medical Records remain unchanged) ...
 app.get('/api/users', async (req, res) => { try { const [rows] = await pool.query('SELECT id, username, role, name FROM Users'); res.json(rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch users', error }); } });
 app.get('/api/patients', async (req, res) => { try { const [rows] = await pool.query('SELECT * FROM Patients'); res.json(rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch patients', error }); } });
-app.post('/api/patients', async (req, res) => { const { name, dob, gender, contact, email, address } = req.body; try { const [result] = await pool.query('INSERT INTO Patients (name, dob, gender, contact, email, address) VALUES (?, ?, ?, ?, ?, ?)',[name, dob, gender, contact, email, address]); res.status(201).json({ id: result.insertId, ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to add patient', error }); } });
-app.put('/api/patients/:id', async (req, res) => { const { id } = req.params; const { name, dob, gender, contact, email, address } = req.body; try { const [result] = await pool.query('UPDATE Patients SET name = ?, dob = ?, gender = ?, contact = ?, email = ?, address = ? WHERE id = ?',[name, dob, gender, contact, email, address, id]); if (result.affectedRows === 0) { return res.status(404).json({ message: 'Patient not found' }); } res.json({ id: parseInt(id), ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to update patient', error }); } });
+app.post('/api/patients', async (req, res) => { const { name, dob, gender, contact, email, address } = req.body; try { const [result] = await pool.query('INSERT INTO Patients (name, dob, gender, contact, email, address) VALUES (?, ?, ?, ?, ?, ?)', [name, dob, gender, contact, email, address]); res.status(201).json({ id: result.insertId, ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to add patient', error }); } });
+app.put('/api/patients/:id', async (req, res) => { const { id } = req.params; const { name, dob, gender, contact, email, address } = req.body; try { const [result] = await pool.query('UPDATE Patients SET name = ?, dob = ?, gender = ?, contact = ?, email = ?, address = ? WHERE id = ?', [name, dob, gender, contact, email, address, id]); if (result.affectedRows === 0) { return res.status(404).json({ message: 'Patient not found' }); } res.json({ id: parseInt(id), ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to update patient', error }); } });
 app.delete('/api/patients/:id', async (req, res) => { const { id } = req.params; try { await pool.query('DELETE FROM MedicalRecords WHERE patientId = ?', [id]); await pool.query('DELETE FROM Appointments WHERE patientId = ?', [id]); const [result] = await pool.query('DELETE FROM Patients WHERE id = ?', [id]); if (result.affectedRows === 0) { return res.status(404).json({ message: 'Patient not found' }); } res.status(200).json({ success: true, message: 'Patient deleted successfully' }); } catch (error) { res.status(500).json({ message: 'Failed to delete patient', error }); } });
 app.get('/api/appointments', async (req, res) => { try { const [rows] = await pool.query('SELECT * FROM Appointments ORDER BY date DESC'); res.json(rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch appointments', error }); } });
-app.post('/api/appointments', async (req, res) => { const { patientId, patientName, doctorName, date, reason } = req.body; try { const [result] = await pool.query('INSERT INTO Appointments (patientId, patientName, doctorName, date, reason, status) VALUES (?, ?, ?, ?, ?, ?)',[patientId, patientName, doctorName, date, reason, 'Scheduled']); res.status(201).json({ id: result.insertId, status: 'Scheduled', ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to schedule appointment', error }); } });
+app.post('/api/appointments', async (req, res) => { const { patientId, patientName, doctorName, date, reason } = req.body; try { const [result] = await pool.query('INSERT INTO Appointments (patientId, patientName, doctorName, date, reason, status) VALUES (?, ?, ?, ?, ?, ?)', [patientId, patientName, doctorName, date, reason, 'Scheduled']); res.status(201).json({ id: result.insertId, status: 'Scheduled', ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to schedule appointment', error }); } });
 app.get('/api/medical-records', async (req, res) => { try { const [rows] = await pool.query('SELECT * FROM MedicalRecords'); res.json(rows); } catch (error) { res.status(500).json({ message: 'Failed to fetch medical records', error }); } });
-app.post('/api/medical-records', async (req, res) => { const { patientId, doctorName, date, diagnosis, prescription, notes } = req.body; try { const [result] = await pool.query('INSERT INTO MedicalRecords (patientId, doctorName, date, diagnosis, prescription, notes) VALUES (?, ?, ?, ?, ?, ?)',[patientId, doctorName, date, diagnosis, prescription, notes]); res.status(201).json({ id: result.insertId, ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to add medical record', error }); } });
+app.post('/api/medical-records', async (req, res) => { const { patientId, doctorName, date, diagnosis, prescription, notes } = req.body; try { const [result] = await pool.query('INSERT INTO MedicalRecords (patientId, doctorName, date, diagnosis, prescription, notes) VALUES (?, ?, ?, ?, ?, ?)', [patientId, doctorName, date, diagnosis, prescription, notes]); res.status(201).json({ id: result.insertId, ...req.body }); } catch (error) { res.status(500).json({ message: 'Failed to add medical record', error }); } });
 
 
 // Start the server
