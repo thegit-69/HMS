@@ -1,8 +1,6 @@
 # This file defines how to run the multi-container application.
 # Run 'docker-compose up' to build and start both services.
 
-version: "3.8"
-
 services:
   # The Backend API Service
   backend:
