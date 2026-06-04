@@ -2,8 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 
 // --- REAL API SETUP ---
-// IMPORTANT: Make sure this URL points to your deployed backend
-// const API_URL = 'https://dasweb-api-cxafebethbb7frdb.uaenorth-01.azurewebsites.net/api';
 const API_URL = 'http://localhost:3001/api';
 
 // Helper to decode JWT payload safely on client side
@@ -62,6 +60,18 @@ const StatCard = ({ icon, label, value, color }) => (
     </div>
 );
 
+const SubmitButton = ({ isSubmitting, text, loadingText, className }) => (
+    <button type="submit" disabled={isSubmitting} className={`${className} ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}>
+        {isSubmitting ? loadingText : text}
+    </button>
+);
+
+const LoadingSpinner = ({ fullScreen }) => (
+    <div className={`flex justify-center items-center ${fullScreen ? 'min-h-screen' : 'p-4'}`}>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+    </div>
+);
+
 
 // --- VIEWS (Complete implementations) ---
 const AuthScreen = () => {
@@ -83,9 +93,11 @@ const AuthScreen = () => {
         const [username, setUsername] = useState('');
         const [password, setPassword] = useState('');
         const [error, setError] = useState('');
+        const [isSubmitting, setIsSubmitting] = useState(false);
 
         const handleLogin = async (e) => {
             e.preventDefault();
+            setIsSubmitting(true);
             try {
                 const result = await api.login(username, password);
                 if (result.success) {
@@ -95,6 +107,8 @@ const AuthScreen = () => {
                 }
             } catch (err) {
                 setError("Invalid credentials or server error.");
+            } finally {
+                setIsSubmitting(false);
             }
         };
 
@@ -106,7 +120,7 @@ const AuthScreen = () => {
                     <form onSubmit={handleLogin} className="space-y-4">
                         <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-3 border rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" required />
                         <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-3 border rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" required />
-                        <button type="submit" className="w-full py-3 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-300 font-semibold">Login</button>
+                        <SubmitButton isSubmitting={isSubmitting} text="Login" loadingText="Signing in..." className="w-full py-3 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-300 font-semibold" />
                     </form>
                 </div>
             </div>
@@ -161,7 +175,7 @@ const AppLayout = ({ user, onLogout }) => {
     const NavLink = ({ viewName, children, requiredRoles }) => { if (requiredRoles && !requiredRoles.includes(user.role)) return null; return <button onClick={() => { setActiveView(viewName); setSelectedPatient(null); setIsSidebarOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${activeView === viewName ? 'bg-indigo-600 text-white border border-indigo-700 shadow-md' : 'text-gray-700 hover:bg-indigo-100 hover:text-indigo-700'}`}>{children}</button>; };
 
     const renderView = () => {
-        if (loading) return <div className="text-center text-xl p-8">Loading data from server...</div>;
+        if (loading) return <LoadingSpinner fullScreen={true} />;
         if (selectedPatient) return <PatientDetailView patient={selectedPatient} records={medicalRecords.filter(r => r.patientId === selectedPatient.id)} onBack={() => setSelectedPatient(null)} user={user} onUpdate={handleUpdatePatient} onDelete={handleDeletePatient} onAddRecord={handleAddRecord} />;
         switch (activeView) {
             case 'patients': return <PatientManagementView patients={patients} setPatients={setPatients} onSelectPatient={setSelectedPatient} user={user} />;

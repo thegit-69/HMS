@@ -8,7 +8,12 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3001;
 const saltRounds = 10;
-const JWT_SECRET = process.env.JWT_SECRET || 'healthcare_fallback_secret_key';
+const JWT_SECRET = process.env.JWT_SECRET;
+// If it doesn't exist, crash the app immediately before hackers can get in
+if (!JWT_SECRET) {
+    console.error("FATAL ERROR: JWT_SECRET is not defined in the environment variables!");
+    process.exit(1);
+}
 
 // Middleware
 app.use(cors());
@@ -40,7 +45,7 @@ const poolConfig = hasSupabaseUrl
     ? {
         connectionString: process.env.DATABASE_URL,
         ssl: { rejectUnauthorized: false }
-      }
+    }
     : {
         host: process.env.DB_HOST || 'localhost',
         user: process.env.DB_USER || 'postgres',
@@ -48,7 +53,7 @@ const poolConfig = hasSupabaseUrl
         database: process.env.DB_NAME || 'healthcare_db',
         port: process.env.DB_PORT || 5432,
         ssl: (process.env.DB_HOST === 'localhost' || process.env.DB_HOST === 'host.docker.internal') ? false : { rejectUnauthorized: false }
-      };
+    };
 
 const pool = new Pool(poolConfig);
 
