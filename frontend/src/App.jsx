@@ -2,7 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 
 // --- REAL API SETUP ---
-const API_URL = 'http://localhost:3001/api';
+// For local setup uncomment the below line
+// const API_URL = 'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_BASE_URL;
 
 // Helper to decode JWT payload safely on client side
 const parseJwt = (token) => {
