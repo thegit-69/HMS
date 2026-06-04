@@ -6,6 +6,29 @@ import axios from 'axios';
 // const API_URL = 'https://dasweb-api-cxafebethbb7frdb.uaenorth-01.azurewebsites.net/api';
 const API_URL = 'http://localhost:3001/api';
 
+// Helper to decode JWT payload safely on client side
+const parseJwt = (token) => {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+            window.atob(base64)
+                .split('')
+                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join('')
+        );
+        return JSON.parse(jsonPayload);
+    } catch (e) {
+        return null;
+    }
+};
+
+// Initialize global Axios Authorization header if token exists in localStorage
+const initialToken = localStorage.getItem('healthcare_token');
+if (initialToken) {
+    axios.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`;
+}
+
 const api = {
     login: async (username, password) => { const response = await axios.post(`${API_URL}/login`, { username, password }); return response.data; },
     registerUser: async (username, password, role, name) => { const response = await axios.post(`${API_URL}/users`, { username, password, role, name }); return { success: true, user: response.data }; },
@@ -42,7 +65,20 @@ const StatCard = ({ icon, label, value, color }) => (
 
 // --- VIEWS (Complete implementations) ---
 const AuthScreen = () => {
-    const [user, setUser] = useState(null);
+    const [user, setUser] = useState(() => {
+        const token = localStorage.getItem('healthcare_token');
+        if (token) {
+            const decoded = parseJwt(token);
+            // Check if token is expired
+            if (decoded && decoded.exp * 1000 > Date.now()) {
+                return decoded;
+            } else {
+                localStorage.removeItem('healthcare_token');
+            }
+        }
+        return null;
+    });
+
     const LoginComponent = () => {
         const [username, setUsername] = useState('');
         const [password, setPassword] = useState('');
@@ -52,7 +88,11 @@ const AuthScreen = () => {
             e.preventDefault();
             try {
                 const result = await api.login(username, password);
-                if (result.success) setUser(result.user);
+                if (result.success) {
+                    localStorage.setItem('healthcare_token', result.token);
+                    axios.defaults.headers.common['Authorization'] = `Bearer ${result.token}`;
+                    setUser(result.user);
+                }
             } catch (err) {
                 setError("Invalid credentials or server error.");
             }
@@ -73,7 +113,10 @@ const AuthScreen = () => {
         );
     };
 
-    if (user) return <AppLayout user={user} onLogout={() => setUser(null)} />;
+    if (user) return <AppLayout user={user} onLogout={() => {
+        localStorage.removeItem('healthcare_token');
+        setUser(null);
+    }} />;
     return <LoginComponent />;
 };
 
