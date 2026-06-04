@@ -101,7 +101,7 @@ const AuthScreen = () => {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
                 <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg">
-                    <div className="text-center mb-8"><h1 className="text-3xl font-bold text-indigo-600">Health Care Cloud System</h1><p className="text-gray-500">Please sign in to continue</p></div>
+                    <div className="text-center mb-8"><h1 className="text-3xl font-bold text-indigo-600">Mediflow</h1><h3 className="text-3xm font-bold text-indigo-600">Hospital Management system</h3><p className="text-gray-500">Please sign in to continue</p></div>
                     {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-sm">{error}</p>}
                     <form onSubmit={handleLogin} className="space-y-4">
                         <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-3 border rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" required />
@@ -187,7 +187,8 @@ const AppLayout = ({ user, onLogout }) => {
                              md:flex md:flex-col`}>
 
                 <div className="p-4 text-center border-b">
-                    <h1 className="text-xl font-bold text-indigo-600">Health Care Cloud</h1>
+                    <h1 className="text-xl font-bold text-indigo-600">Mediflow</h1>
+                    <h3 className="text-xm font-bold text-indigo-500">Health Care Cloud Management System</h3>
                 </div>
 
                 <div className="p-4 border-b">

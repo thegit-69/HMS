@@ -1,5 +1,5 @@
 # Ignore dependencies and build/logs
-node_modules/
+node_modules/   
 npm-debug.log
 *.log
 
