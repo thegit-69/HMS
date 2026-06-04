@@ -1,8 +1,21 @@
-node_modules
+# Ignore dependencies and build/logs
+node_modules/
 npm-debug.log
+*.log
+
+# Ignore environment config
 .env
 .env.*
+
+# Ignore Docker/Git setup files
 Dockerfile
+docker-compose*
 .dockerignore
 .git
 .gitignore
+
+# Ignore editor and system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
